@@ -1,0 +1,998 @@
+﻿@page "/";
+@inject IJSRuntime jsRuntime;
+@using System.Text.Json;
+@using System.Text.Json.Serialization;
+@using System.ComponentModel;
+
+@inject HttpClient Http
+
+<PageTitle>Index</PageTitle>
+
+
+<div class="main-title" >
+    Control de metas
+</div>
+
+
+<div class="container-options">
+
+    <div class="main-metas">
+        <button class="btn-primary primary-button" id="addmeta-btn" @onclick="ShowAddMeta">Nueva meta</button>
+        <div class="container-metas">
+            @*COmponenete para crear y listar las metas*@
+            @if (ListaMetas != null)
+            {
+                @foreach (var item in ListaMetas)
+                {
+                    @if (item != null)
+                    {
+                        <div class="Meta-item" @onclick="()=>SelectedMeta(item)">
+
+                            <div class="container-btns">
+                                <img src="../assets/edit.png" alt="edit button" class="mini-btn" @onclick="()=>EditShowModal(item)">
+                                <img src="../assets/delte.png" alt="delete button" class="mini-btn" @onclick="()=>DeleteShowModal(item)">
+                            </div>
+
+                            <label for="Nombre de la meta">@item.Nombre</label>
+
+                            <label for="Fecha"> Fecha creada: @item.FechaCreacion.ToShortDateString() </label>
+
+                            <label for="Tareas">Tareas completadas: @item.Completadas/@item.TotalTareas </label>
+
+                            <progress class="progress-style" max="100" value="@item.Porciento">  </progress>
+
+                        </div>
+                    }
+                }
+            }
+        </div>
+    </div>
+
+    <div class="container-mainTareas">
+        <div class="header-tareas" >
+            @if (selectedMeta!=null)
+            {
+                <label for="Meta">@selectedMeta.Nombre.</label>
+            }
+            else
+            {
+                <label for="Meta">Seleccione una meta.</label>
+            }
+        </div>
+
+        <div class="content-container">
+            <div class="add-containerbtn">
+                <button class="btn-primary primary-button" @onclick="ShowAddTarea">
+                   Agregar tarea
+               </button>
+               @if (ObtenerElementosSeleccionados().Count>0)
+                {
+                    <button class="btn-primary primary-button" @onclick="CompletarTareas">
+                        Completar tarea
+                    </button>
+                    <button class="btn-primary primary-button" @onclick="ShowEditTarea">
+                        Editar
+                    </button>
+                    <button class="btn-primary primary-button" @onclick="ShowDeleteTarea">
+                        Eliminar
+                    </button>
+                }
+                
+            </div>
+           <div class="ListaActiva" >
+               <div class="titles-lista">
+                    <label for="Tarea" class="label-input">
+                        Seleccionar
+                        <input type="checkbox" @onchange="()=>SeleccionarTodos(Seleccionados)" >
+                    </label>
+                                        
+                    <label for="Importante"></label>
+                    <label for="Tarea" class="label-input">
+                            Tarea
+                        <input type="text" id="filtroNombre" value="@Filtro?.Nombre"  @onchange="NombreChange" />
+                    </label>
+                    <label for="Fecha" class="label-input">
+                            Fecha
+                            <input type="date" @onchange="FechaChange" >
+                    </label>
+                    <label for="Estado" class="label-input">
+                            Estado
+                        <input type="text" @onchange="estadoeChange" value="@Filtro?.Estado" />
+                    </label>
+               </div>
+           </div>
+           <div class="tareas-container">
+                @if (TareasList != null)
+                {
+                    @foreach (var item in TareasList)
+                    {
+                        @if (item != null)
+                        {
+                            <div class="tareas-item">
+                                <input type="checkbox" @bind="@item.IsSelected" >
+                                @if (item.IsImportant == true)
+                                {
+                                    <img src="../assets/star amarilla.png" alt="favorito" class="star-btn" @onclick="()=>IsImportantTask(item)">
+                                }
+                                else
+                                {
+                                    <img src="../assets/star gris.png" alt="favorito" class="star-btn" @onclick="()=>IsImportantTask(item)">
+                                }                               
+                                <label> @item.Nombre</label>
+                                @if (item.FechaCreada!=null)
+                                {
+                                    <label> @item.FechaCreada.Value.ToShortDateString() </label>
+                                }                                
+                                @if (item.Estado != "Completada")
+                                {
+                                    <label> @item.Estado</label>
+                                }
+                                else
+                                {
+                                    <label class="completado-item"> @item.Estado</label>
+                                }
+                                
+                            </div>
+                        }
+                    }
+                }
+           </div>
+           <div class="Paginacion">
+               <div>
+                    <img src="../assets/flechaIzquieda.png" alt="left" class="flecha-img" @onclick="AnteriorPagina" >
+                    <label for="paginacion" class="pagina-actual" >@PaginaActual</label>
+                    <img src="../assets/flechaDerecha.png" alt="rigth" class="flecha-img" @onclick="SiguientePagina">
+               </div>
+               <div>
+                    @Inicio - @Fin de @totalTareas registros
+               </div>
+           </div>
+        </div>
+    </div>
+</div>
+
+<!-- Crear la ventana modal add meta -->
+<div id="modal" class="modal-style inactive">
+    <div class="modal-meta modal-content">
+        <div class="div-modal-title">
+            Agregar nueva meta
+        </div>
+        <span class="close">&times;</span>
+        <div class="content-modal">
+            @if (newMeta!=null)
+            {
+                <label for="Nombre meta">Nombre <input type="text" @bind="@newMeta.Nombre"></label>
+            }
+            <div class="modal-btns">
+                <button @onclick="AddMeta" class="primary-button">Aceptar</button>
+                <button @onclick="CancelAddMeta" id="close-modal-button">Cancelar</button>
+            </div>
+        </div>
+           
+    </div>
+</div>
+
+<div id="modalEditMeta" class="modal-style inactive">
+    <div class="modal-meta">
+        <div class="div-modal-title">
+            Editar meta
+        </div>
+        <div class="content-modal">
+            @if (newMeta!=null)
+            {
+                <label for="Nombre meta">Nombre <input type="text" @bind="@newMeta.Nombre"></label>
+            }
+            <div class="modal-btns">
+                <button @onclick="EditMeta" class="primary-button">Aceptar</button>
+                <button @onclick="CancelEdit" id="close-modal-button">Cancelar</button>
+            </div>
+        </div>
+           
+    </div>
+</div>
+
+<div id="modalDeleteMeta" class="modal-style inactive">
+    <div class="modal-delete-meta">
+       <h1>¿Está seguro?</h1>
+        @if (newMeta != null)
+        {
+            <label>Que desea eliminar el elemento "@newMeta.Nombre" </label>
+        }
+        <div class="modal-btns">
+            <button @onclick="DeleteMeta" class="primary-button">Aceptar</button>
+            <button @onclick="CancelDelete" id="close-modal-button">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Contenedor para la pantalla modal -->
+<div id="myModal" class="modal-style inactive">
+    <!-- Contenido de la pantalla modal -->
+    <div class="modal-content">
+        <div class="div-modal-title">
+            Agregar nueva tarea
+        </div>
+        <span class="close">&times;</span>
+        <div class="content-modal">
+            @if (newMeta != null)
+            {
+                <label for="Nombre meta">Nombre <input type="text" @bind="@newMeta.Nombre"></label>
+            }
+        </div>
+        <div class="modal-btns">
+            <button @onclick="AddMeta" class="primary-button">Aceptar</button>
+            <button @onclick="CancelAddMeta" id="close-modal-button">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<div id="modalAddTarea" class="modal-style inactive">
+    <div class="modal-meta modal-content">
+        <div class="div-modal-title">
+            Agregar tarea
+        </div>
+        <span class="close">&times;</span>
+        <div class="content-modal">
+            @if (newTarea != null)
+            {
+                <label for="Nombre meta">Nombre <input type="text" @bind="@newTarea.Nombre"></label>
+            }
+            <div class="modal-btns">
+                <button @onclick="AddTarea" class="primary-button">Aceptar</button>
+                <button @onclick="CancelAddTarea" id="close-modal-button">Cancelar</button>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<div id="modalDeleteTarea" class="modal-style inactive">
+    <div class="modal-delete-meta">
+        <h1>¿Está seguro?</h1>
+     
+        <label>
+            Que desea eliminar el elemento(s) 
+            @string.Join(", ", ObtenerElementosSeleccionadosArray())
+            
+        </label>
+     
+        <div class="modal-btns">
+            <button @onclick="DeleteTarea" class="primary-button">Aceptar</button>
+            <button @onclick="CloseModalTareaDelete" id="close-modal-button">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Contenedor para la pantalla modal edit tarea -->
+<div id="modalEditTarea" class="modal-style inactive">
+    <div class="modal-meta">
+        <div class="div-modal-title">
+            Editar tarea
+        </div>
+        <div class="content-modal">
+            @if (newTarea != null)
+            {
+                <label for="Nombre tarea">Nombre <input type="text" @bind="@newTarea.Nombre"> </label>
+            }
+            <div class="modal-btns">
+                <button @onclick="EditTarea" class="primary-button">Aceptar</button>
+                <button @onclick="CancelEditTarea" id="close-modal-button">Cancelar</button>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+@code {
+    #region Propiedades
+    private Meta[]? ListaMetas;
+    private Tarea[]? TareasList;
+
+    private Meta? newMeta { get; set; }
+    private Tarea? newTarea { get; set; }
+
+    public bool Seleccionados { get; set; }
+
+    private Meta? selectedMeta { get; set; }
+    private Tarea? selectedTarea { get; set; }
+
+    public Tarea? Filtro { get; set; }
+
+    public int totalTareas { get; set; }
+    public int PaginaActual { get; set; }
+    public int Inicio { get; set; }
+    public int Fin { get; set; }
+    #endregion
+
+    private string? rutaApi = "https://apipruebatecnica.azurewebsites.net";
+
+    #region filtros
+    private void NombreChange(ChangeEventArgs __e)
+    {
+        if (Filtro != null && selectedMeta != null)
+        {
+            Filtro.Nombre = __e?.Value?.ToString();
+
+            FiltrarResultados();
+
+        }
+    }
+
+    private void estadoeChange(ChangeEventArgs __e)
+    {
+        if (Filtro != null && selectedMeta != null)
+        {
+            Filtro.Estado = __e?.Value?.ToString();
+
+            FiltrarResultados();
+
+        }
+    }
+
+    private void FechaChange(ChangeEventArgs __e)
+    {
+        if (Filtro != null && selectedMeta != null)
+        {
+            Filtro.FechaCreada = DateTime.Parse(__e?.Value?.ToString());
+
+            FiltrarResultados();
+
+        }
+    }
+
+    private async void FiltrarResultados()
+    {
+        if (Filtro != null && selectedMeta != null)
+        {
+            await GetTotalTareas();
+
+            Fin = PaginaActual * 5;
+
+            if (totalTareas < Fin)
+            {
+                Fin = totalTareas;
+
+            }
+            Inicio = Fin - 4;
+            if (Inicio < 0)
+            {
+                Inicio = 1;
+            }
+
+            string filtrosCadena = "";
+
+            if (Filtro.Nombre != null && Filtro.Nombre.Trim() != string.Empty)
+            {
+                filtrosCadena += $"&nombre={Filtro.Nombre}";
+            }
+            if (Filtro.FechaCreada != null)
+            {
+                filtrosCadena += $"&fecha={Filtro.FechaCreada}";
+            }
+            if (Filtro.Estado != null && Filtro.Estado.Trim() != string.Empty)
+            {
+                filtrosCadena += $"&estado={Filtro.Estado}";
+            }
+
+            var peticion = rutaApi + $"/api/listas/ObtenerTareasPaginadasFiltros?id={selectedMeta.id.ToString()}&inicio={Inicio}&fin={Fin}{filtrosCadena}";
+
+            TareasList = await Http.GetFromJsonAsync<Tarea[]>(peticion);
+
+
+            if (totalTareas < Fin)
+            {
+                Fin = totalTareas;
+            }
+
+            StateHasChanged();
+        }
+    }
+    #endregion
+   
+    #region paginacion
+    private async void AnteriorPagina()
+    {
+        if (PaginaActual != 1)
+        {
+            PaginaActual--;
+            if (selectedMeta != null)
+                await GetTareas(selectedMeta.id);
+        }
+
+    }
+
+    private async void SiguientePagina()
+    {
+        var resultado = Decimal.Parse(totalTareas.ToString()) % 5;
+
+        var totalPaginas = (totalTareas / 5);
+
+        if (resultado > 0)
+        {
+            totalPaginas += 1;
+        }
+
+        if (totalPaginas > PaginaActual)
+        {
+            PaginaActual++;
+            if (selectedMeta != null)
+                await GetTareas(selectedMeta.id);
+        }
+
+    }
+    #endregion
+   
+
+    private List<Tarea> ObtenerElementosSeleccionados()
+    {
+        var seleccionadosList = new List<Tarea>();
+
+        if (TareasList != null)
+        {
+            foreach (var item in TareasList)
+            {
+                if (item.IsSelected)
+                {
+                    seleccionadosList.Add(item);
+                }
+            }
+        }
+        return seleccionadosList;
+    }
+
+    private string[] ObtenerElementosSeleccionadosArray()
+    {
+        var seleccionadosList = new List<string>();
+
+        if (TareasList != null)
+        {
+            foreach (var item in TareasList)
+            {
+
+                if (item.IsSelected)
+                {
+                    seleccionadosList.Add(item.Nombre);
+                }
+            }
+        }
+        return seleccionadosList.ToArray();
+    }
+
+    private  void SeleccionarTodos(bool seleccionar)
+    {
+        Seleccionados = !seleccionar;
+        if (TareasList != null)
+        {
+            foreach (var item in TareasList)
+            {
+                item.IsSelected = Seleccionados;
+            }
+        }
+
+    }
+
+    private async void ShowAddTarea()
+    {
+        if (selectedMeta == null)
+        {
+            await jsRuntime.InvokeAsync<object>("alert", "Aun no ha seleccionado una meta.");
+
+        }
+        else
+        {
+            newTarea = new Tarea();
+            await jsRuntime.InvokeAsync<object>("showModal", "modalAddTarea");
+        }       
+    }
+
+    private async void ShowEditTarea()
+    {
+        var tareasSeleccionadas = ObtenerElementosSeleccionados();
+
+        if (tareasSeleccionadas.Count > 1)
+        {
+            await jsRuntime.InvokeAsync<object>("alert", "Para poder editar seleccione solo una tarea.");
+            return;
+        }
+        else if (tareasSeleccionadas.Count == 0)
+        {
+            await jsRuntime.InvokeAsync<object>("alert", "No ha seleccionado una tarea a editar");
+            return;
+        }
+        else
+        {
+            newTarea = tareasSeleccionadas[0];
+        }
+
+        await jsRuntime.InvokeAsync<object>("showModal", "modalEditTarea");        
+    }
+
+    private async void IsImportantTask(Tarea item)
+    {
+        using (var client = new HttpClient())
+        {
+            item.IsImportant = !item.IsImportant;
+            var content = JsonSerializer.Serialize<Tarea>(item);
+
+            var url = rutaApi + $"/api/listas/TareaImportante";
+
+            var resultRequest = await client.PutAsJsonAsync(url, content);
+
+            string respu4esta = (await resultRequest.Content.ReadAsStringAsync()).Substring(1, 11);
+
+            StateHasChanged();
+        };
+
+    }
+
+    private async void ShowDeleteTarea()
+    {
+        var seleccionados= ObtenerElementosSeleccionados().Count;
+        if (seleccionados>0)
+        {
+            await jsRuntime.InvokeAsync<object>("showModal", "modalDeleteTarea");
+        }
+        else
+        {
+            await jsRuntime.InvokeAsync<object>("alert", "No hay tareas seleccionadas.");
+        }
+    }
+
+    private async void ShowAddMeta()
+    {
+        await jsRuntime.InvokeAsync<object>("showModal", "modal");
+
+    }
+
+    private  async void SelectedMeta(Meta oMeta)
+    {
+        selectedMeta = oMeta;
+        PaginaActual = 1;
+        Filtro = new Tarea();
+        await GetTareas(oMeta.id);
+        StateHasChanged();
+    }
+
+    private async void AddTarea()
+    {
+        if (ValidacionesTarea())
+        {
+            if (newTarea != null && selectedMeta != null)
+            {
+                var tareaAux = new Tarea();
+                tareaAux.Nombre = newTarea.Nombre;
+                tareaAux.FechaCreada = DateTime.Now;
+                tareaAux.IdMeta = selectedMeta.id;
+                using (var client = new HttpClient())
+                {
+
+                    var content = JsonSerializer.Serialize<Tarea>(tareaAux);
+
+                    var response = await Http.PostAsJsonAsync<string>(rutaApi + "/api/listas/AddTarea", content);
+
+                    await obtenerMetas();
+
+                    CancelAddTarea();
+
+                    if (newMeta != null)
+                    {
+                        await GetTareas(selectedMeta.id);
+                    }                    
+
+                    StateHasChanged();
+
+                };
+            }
+        }
+    }
+
+    private async void EditTarea()
+    {
+        
+        if (newTarea != null)
+        {
+            if (ValidacionesTarea())
+            {
+                using (var client = new HttpClient())
+                {
+                    var content = JsonSerializer.Serialize<Tarea>(newTarea);
+
+                    var url = rutaApi + $"/api/listas/UpdateTarea?id={newTarea.Id}";
+
+                    var resultRequest = await client.PostAsJsonAsync(url, content);
+
+                    string respu4esta = (await resultRequest.Content.ReadAsStringAsync()).Substring(1, 11);
+
+                    if (respu4esta == "VALUE EXIST")
+                    {
+                        await jsRuntime.InvokeAsync<object>("alert", "Ya existe una meta registrada con ese nombre.");
+                    }
+                    else
+                    {
+                        CancelEditTarea();
+
+                        await obtenerMetas();
+
+                        StateHasChanged();
+                    }
+                };
+            }
+        }
+    }
+
+    private bool ValidacionesTarea()
+    {
+        var IsValid = true;
+
+        var mensaje = "";
+        if (newTarea != null)
+        {
+            if (newTarea?.Nombre?.Trim().Length < 80 && newTarea?.Nombre?.Trim().Length > 0)
+            {
+                IsValid = true;
+
+            }
+            else
+            {
+                mensaje = "- Nombre de la tarea (Formato incorrecto).";
+                IsValid = false;
+            }
+        }
+        else
+            IsValid = false;
+
+        if (mensaje != "")
+        {
+            jsRuntime.InvokeAsync<object>("alert", "Verifique la siguiente informacion: \n" + mensaje);
+        }
+
+        return IsValid;
+    }
+
+    private async void AddMeta()
+    {
+        if (ValidacionesMeta())
+        {
+            if (newMeta != null)
+            {
+                var oMeta = new Meta();
+                oMeta.Nombre = newMeta.Nombre;
+                oMeta.FechaCreacion = DateTime.Now;
+                using (var client = new HttpClient())
+                {
+
+                    var content = JsonSerializer.Serialize<Meta>(oMeta);
+
+                    var response = await Http.PostAsJsonAsync<string>(rutaApi + "/api/listas/AddMeta", content);
+
+                    string respu4esta = (await response.Content.ReadAsStringAsync()).Substring(1, 11);
+
+                    if (respu4esta == "VALUE EXIST")
+                    {
+                        await jsRuntime.InvokeAsync<object>("alert", "Ya existe una meta registrada con ese nombre.");
+                    }
+                    else
+                    {
+                        await obtenerMetas();
+
+                        StateHasChanged();
+
+                        CancelAddMeta();
+                    }
+
+                   
+
+                };
+            }
+        }      
+    }
+
+
+    private async void EditShowModal(Meta item)
+    {
+        newMeta = item;
+        await jsRuntime.InvokeAsync<object>("showModal", "modalEditMeta");
+    }
+
+    #region Deletes
+    private async void DeleteMeta()
+    {
+        var oMeta = newMeta;
+        if (oMeta != null)
+        {
+            using (var client = new HttpClient())
+            {
+                var om = oMeta.GetType();
+                var contwent = JsonSerializer.Serialize(oMeta);
+                var content = JsonSerializer.Serialize<Meta>(oMeta);
+                //?id=1
+                var url = rutaApi + $"/api/listas/DeleteMeta?id={oMeta.id}";
+
+                await client.DeleteAsync(url);
+
+                CancelDelete();
+
+                await obtenerMetas();
+
+                StateHasChanged();
+
+            };
+        }
+    }
+
+    private async void DeleteTarea()
+    {
+        if (newMeta != null && selectedMeta != null)
+        {
+            using (var client = new HttpClient())
+            {
+
+                var seleccionados = ObtenerElementosSeleccionados();
+
+                var content = JsonSerializer.Serialize<Tarea[]>(seleccionados.ToArray());
+
+                var url = rutaApi + $"/api/listas/DeleteTarea";
+
+                var resultRequest = await client.PostAsJsonAsync(url, content);
+
+                CloseModalTareaDelete();
+
+                await GetTareas(selectedMeta.id);
+
+                StateHasChanged();
+
+            };
+        }
+    }
+    
+    private async void DeleteShowModal(Meta item)
+    {
+        newMeta = item;
+        await jsRuntime.InvokeAsync<object>("showModal", "modalDeleteMeta");
+    }
+
+    #endregion
+
+    private async void CompletarTareas()
+    {
+
+        if (newMeta != null)
+        {
+            using (var client = new HttpClient())
+            {
+
+                var seleccionados = ObtenerElementosSeleccionados();
+
+                foreach (var item in seleccionados)
+                {
+                    item.Estado = "Completada";
+                }
+
+                var content = JsonSerializer.Serialize<Tarea[]>(seleccionados.ToArray());
+
+                var url = rutaApi + $"/api/listas/CompletarTareas";
+
+                var resultRequest = await client.PostAsJsonAsync(url, content);
+
+                StateHasChanged();
+
+            };
+        }
+    }
+
+    private async void EditMeta()
+    {
+        if (newMeta != null)
+        {
+            if (ValidacionesMeta())
+            {
+                using (var client = new HttpClient())
+                {
+                    var content = JsonSerializer.Serialize<Meta>(newMeta);
+
+                    var url = rutaApi + $"/api/listas/UpdateMeta?id={newMeta.id}";
+
+                    var resultRequest = await client.PostAsJsonAsync(url, content);
+
+                    string respu4esta = (await resultRequest.Content.ReadAsStringAsync()).Substring(1, 11);
+
+                    if (respu4esta == "VALUE EXIST")
+                    {
+                        await jsRuntime.InvokeAsync<object>("alert", "Ya existe una meta registrada con ese nombre.");
+                    }
+                    else
+                    {
+                        CancelEdit();
+
+                        await obtenerMetas();
+
+                        StateHasChanged();
+                    }
+                };
+            }
+        }
+    }
+ 
+    #region Ocultar modales 
+    private void CancelEdit()
+    {
+        newMeta = new Meta();
+        jsRuntime.InvokeAsync<object>("closeModal", "modalEditMeta");
+    }
+
+    private void CancelDelete()
+    {
+        newMeta = new Meta();
+        jsRuntime.InvokeAsync<object>("closeModal", "modalDeleteMeta");
+    }
+
+    private void CancelAddMeta()
+    {
+        newMeta = new Meta();
+        jsRuntime.InvokeAsync<object>("closeModal", "modal");
+    }
+
+    private void CancelAddTarea()
+    {
+        newTarea = new Tarea();
+        jsRuntime.InvokeAsync<object>("closeModal", "modalAddTarea");
+    }
+
+    private void CancelEditTarea()
+    {
+        newTarea = new Tarea();
+        jsRuntime.InvokeAsync<object>("closeModal", "modalEditTarea");
+    }
+
+    private void CloseModalTareaDelete()
+    {
+        newTarea = new Tarea();
+        jsRuntime.InvokeAsync<object>("closeModal", "modalDeleteTarea");
+    }
+    #endregion
+  
+
+    private async Task obtenerMetas()
+    {
+        ListaMetas = await Http.GetFromJsonAsync<Meta[]>(rutaApi + "/api/listas/obtenermetas");
+    }
+
+    private async Task GetTotalTareas()
+    {
+        if (selectedMeta!=null)
+        {
+            string filtrosCadena = "";
+            if (Filtro!=null)
+            {
+                if (Filtro.Nombre != null && Filtro.Nombre.Trim() != string.Empty)
+                {
+                    filtrosCadena += $"&nombre={Filtro.Nombre}";
+                }
+                if (Filtro.FechaCreada != null)
+                {
+                    filtrosCadena += $"&fecha={Filtro.FechaCreada}";
+                }
+                if (Filtro.Estado != null && Filtro.Estado.Trim() != string.Empty)
+                {
+                    filtrosCadena += $"&estado={Filtro.Estado}";
+                }
+            }            
+
+            totalTareas = await Http.GetFromJsonAsync<int>(rutaApi + $"/api/listas/ObtenerTotalTareas?id={selectedMeta.id}" + filtrosCadena);
+        }        
+    }
+
+    private async Task GetTareas(Guid idMeta)
+    {
+        await GetTotalTareas();
+
+        Fin = PaginaActual*5;
+
+        if (totalTareas < Fin)
+        {
+            Fin = totalTareas;
+
+        }
+        Inicio = Fin - 4;
+        if (Inicio<0)
+        {
+            Inicio = 1;
+        }
+
+        TareasList = await Http.GetFromJsonAsync<Tarea[]>(rutaApi + $"/api/listas/ObtenerTareasPaginadas?id={idMeta.ToString()}&inicio={Inicio}&fin={Fin}");
+
+
+        if (totalTareas<Fin)
+        {
+            Fin = totalTareas;
+
+        }
+
+        StateHasChanged();
+    }
+
+    private bool ValidacionesMeta()
+    {
+        var IsValid = true;
+
+        var mensaje = "";
+        if (newMeta != null)
+        {
+            if (newMeta?.Nombre?.Trim().Length < 80 && newMeta?.Nombre?.Trim().Length > 0)
+            {
+                IsValid = true;
+
+            }
+            else
+            {
+                mensaje = "- Nombre de la meta (Formato incorrecto).";
+                IsValid = false;
+            }
+        }
+        else
+            IsValid = false;
+
+        if (mensaje!="")
+        {
+            jsRuntime.InvokeAsync<object>("alert", "Verifique la siguiente informacion: \n"+ mensaje);
+        }
+
+        return IsValid;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await obtenerMetas();
+        PaginaActual = 1;
+        newMeta = new Meta();
+        Filtro = new Tarea();
+        Filtro.FechaCreada = null;
+    }
+  
+    #region clases
+    public class Meta
+    {
+        public Guid id { get; set; }
+
+        public string? Nombre { get; set; }
+
+        public DateTime FechaCreacion { get; set; }
+
+        public int TotalTareas { get; set; }
+
+        public int Porciento { get; set; }
+
+        public int Completadas { get; set; }
+
+    }
+
+    public class Tarea
+    {
+        public Guid Id { get; set; }
+
+        public Guid IdMeta { get; set; }
+
+        private string? _nombre;
+        public string? Nombre
+        {
+            get { return _nombre; }
+            set
+            {
+                _nombre = value;
+            }
+        }
+
+        public DateTime? FechaCreada { get; set; }
+
+        public string? Estado { get; set; }
+
+        public bool IsImportant { get; set; }
+
+        public bool IsSelected { get; set; }
+
+
+    }
+    #endregion
+   
+}
+
